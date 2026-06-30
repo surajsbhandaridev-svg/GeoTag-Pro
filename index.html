@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="GeoTag Pro – Edit EXIF metadata and add GPS geotags to your images, entirely in your browser. Privacy-first, no uploads." />
+  <title>GeoTag Pro – GPS Metadata Editor</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div id="toast-container" role="alert" aria-live="polite"></div>
+
+<!-- ===== LOADING OVERLAY ===== -->
+<div id="loading-overlay" class="loading-overlay hidden" aria-hidden="true">
+  <div class="loading-content">
+    <div class="spinner"></div>
+    <p id="loading-text">Processing…</p>
+    <div class="progress-bar-wrap"><div id="progress-bar" class="progress-bar"></div></div>
+  </div>
+</div>
+
+<!-- ===== HEADER ===== -->
+<header class="app-header">
+  <div class="header-inner">
+    <div class="logo">
+      <svg class="logo-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="16" cy="16" r="15" stroke="currentColor" stroke-width="2"/>
+        <path d="M16 8C12.686 8 10 10.686 10 14C10 18.5 16 24 16 24C16 24 22 18.5 22 14C22 10.686 19.314 8 16 8Z" fill="currentColor"/>
+        <circle cx="16" cy="14" r="2.5" fill="white"/>
+      </svg>
+      <span class="logo-text">GeoTag <strong>Pro</strong></span>
+    </div>
+    <nav class="header-actions">
+      <button id="btn-reset-all" class="btn btn-ghost btn-sm" title="Reset all fields">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10a6 6 0 1 1 1.5 4"/><polyline points="4 6 4 10 8 10"/></svg>
+        Reset
+      </button>
+      <button id="btn-undo" class="btn btn-ghost btn-sm" title="Undo (Ctrl+Z)" disabled>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 13 2 8 7 3"/><path d="M18 18v-6a6 6 0 0 0-6-6H2"/></svg>
+      </button>
+      <button id="btn-redo" class="btn btn-ghost btn-sm" title="Redo (Ctrl+Y)" disabled>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 13 18 8 13 3"/><path d="M2 18v-6a6 6 0 0 1 6-6h10"/></svg>
+      </button>
+      <button id="btn-theme" class="btn btn-ghost btn-sm btn-icon" title="Toggle dark mode" aria-label="Toggle dark mode">
+        <svg class="icon-sun" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4.22 1.78a1 1 0 011.42 1.42l-.71.7a1 1 0 11-1.41-1.41l.7-.71zM18 9a1 1 0 110 2h-1a1 1 0 110-2h1zM4.22 16.22a1 1 0 001.42-1.42l-.71-.7a1 1 0 00-1.41 1.41l.7.71zM10 17a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm-5.78-1.78a1 1 0 001.42 1.42l.7-.71a1 1 0 00-1.41-1.41l-.71.7zM3 10a1 1 0 110 2H2a1 1 0 110-2h1zm12.78-5.78a1 1 0 00-1.42 1.42l.71.7a1 1 0 001.41-1.41l-.7-.71zM10 6a4 4 0 100 8 4 4 0 000-8z" clip-rule="evenodd"/></svg>
+        <svg class="icon-moon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<!-- ===== MAIN CONTENT ===== -->
+<main class="app-main">
+
+  <!-- STEP 1: UPLOAD -->
+  <section class="card upload-section" id="section-upload">
+    <div class="card-header">
+      <span class="step-badge">1</span>
+      <h2>Upload Image</h2>
+    </div>
+    <div class="card-body">
+      <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Upload image – click or drag and drop">
+        <div class="drop-zone-inner" id="dz-idle">
+          <svg class="dz-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="36" rx="4"/><path d="M16 30l6-8 5 6 4-4 5 6"/><circle cx="18" cy="18" r="2"/></svg>
+          <p class="dz-label">Drag &amp; drop a JPEG here</p>
+          <p class="dz-sub">or click to browse</p>
+          <span class="dz-accept">JPG / JPEG only</span>
+        </div>
+        <div class="drop-zone-preview hidden" id="dz-preview">
+          <img id="preview-img" alt="Image preview" />
+          <div class="image-info" id="image-info"></div>
+        </div>
+        <input type="file" id="file-input" accept=".jpg,.jpeg,image/jpeg" class="sr-only" aria-label="File input" />
+      </div>
+      <div class="upload-actions hidden" id="upload-actions">
+        <button id="btn-change-image" class="btn btn-outline btn-sm">Change Image</button>
+        <button id="btn-fullscreen" class="btn btn-ghost btn-sm">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5"/></svg>
+          Fullscreen
+        </button>
+        <button id="btn-compare" class="btn btn-ghost btn-sm">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3v14M3 6h4M3 10h4M3 14h4M13 6h4M13 10h4M13 14h4"/></svg>
+          Compare Metadata
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2: MAP -->
+  <section class="card map-section hidden" id="section-map">
+    <div class="card-header">
+      <span class="step-badge">2</span>
+      <h2>Set Location</h2>
+    </div>
+    <div class="card-body">
+      <div class="map-search-row">
+        <div class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="5"/><path d="M15 15l-3-3"/></svg>
+          <input type="text" id="map-search" placeholder="Search location…" class="input search-input" autocomplete="off" />
+          <div id="search-suggestions" class="search-suggestions hidden"></div>
+        </div>
+        <button id="btn-use-location" class="btn btn-outline btn-sm" title="Use my current GPS location">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="3"/><path d="M10 1v3M10 16v3M1 10h3M16 10h3"/></svg>
+          My Location
+        </button>
+      </div>
+      <div id="map-container" class="map-container"></div>
+      <div class="coords-row">
+        <div class="field-group">
+          <label for="input-lat" class="field-label">Latitude</label>
+          <input type="number" id="input-lat" class="input mono" step="0.000001" min="-90" max="90" placeholder="0.000000" />
+        </div>
+        <div class="field-group">
+          <label for="input-lng" class="field-label">Longitude</label>
+          <input type="number" id="input-lng" class="input mono" step="0.000001" min="-180" max="180" placeholder="0.000000" />
+        </div>
+        <button id="btn-copy-coords" class="btn btn-ghost btn-sm" title="Copy coordinates">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="9" height="9" rx="1"/><path d="M3 12V3h9v5"/></svg>
+          Copy
+        </button>
+        <button id="btn-paste-coords" class="btn btn-ghost btn-sm" title="Paste coordinates">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h6a1 1 0 011 1v1H6V4a1 1 0 011-1zM4 6h12a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V7a1 1 0 011-1z"/></svg>
+          Paste
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: METADATA EDITOR -->
+  <section class="card meta-section hidden" id="section-meta">
+    <div class="card-header">
+      <span class="step-badge">3</span>
+      <h2>Edit Metadata</h2>
+    </div>
+    <div class="card-body">
+      <div class="meta-tabs" role="tablist">
+        <button class="meta-tab active" role="tab" data-tab="gps" aria-selected="true">GPS</button>
+        <button class="meta-tab" role="tab" data-tab="address" aria-selected="false">Address</button>
+        <button class="meta-tab" role="tab" data-tab="datetime" aria-selected="false">Date &amp; Time</button>
+        <button class="meta-tab" role="tab" data-tab="camera" aria-selected="false">Camera</button>
+        <button class="meta-tab" role="tab" data-tab="author" aria-selected="false">Author</button>
+        <button class="meta-tab" role="tab" data-tab="image" aria-selected="false">Image</button>
+      </div>
+
+      <!-- GPS Tab -->
+      <div class="meta-panel active" id="tab-gps" role="tabpanel">
+        <div class="fields-grid">
+          <div class="field-group">
+            <label for="meta-lat" class="field-label">Latitude <span class="field-hint">(-90 to +90)</span></label>
+            <input type="number" id="meta-lat" class="input mono" step="0.000001" min="-90" max="90" placeholder="0.000000" />
+          </div>
+          <div class="field-group">
+            <label for="meta-lng" class="field-label">Longitude <span class="field-hint">(-180 to +180)</span></label>
+            <input type="number" id="meta-lng" class="input mono" step="0.000001" min="-180" max="180" placeholder="0.000000" />
+          </div>
+          <div class="field-group">
+            <label for="meta-alt" class="field-label">Altitude (m)</label>
+            <input type="number" id="meta-alt" class="input mono" step="0.1" placeholder="0.0" />
+          </div>
+          <div class="field-group">
+            <label for="meta-direction" class="field-label">Compass Direction (°)</label>
+            <input type="number" id="meta-direction" class="input mono" step="0.01" min="0" max="360" placeholder="0.00" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Address Tab -->
+      <div class="meta-panel" id="tab-address" role="tabpanel">
+        <div class="address-status" id="geocode-status"></div>
+        <div class="fields-grid">
+          <div class="field-group field-full">
+            <label for="meta-address" class="field-label">Full Address</label>
+            <input type="text" id="meta-address" class="input" placeholder="Full address" />
+            <button id="btn-copy-address" class="btn-inline-copy" title="Copy address">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1"/><path d="M2 10V2h8v3"/></svg>
+            </button>
+          </div>
+          <div class="field-group">
+            <label for="meta-country" class="field-label">Country</label>
+            <input type="text" id="meta-country" class="input" placeholder="Country" />
+          </div>
+          <div class="field-group">
+            <label for="meta-state" class="field-label">State / Province</label>
+            <input type="text" id="meta-state" class="input" placeholder="State" />
+          </div>
+          <div class="field-group">
+            <label for="meta-city" class="field-label">City</label>
+            <input type="text" id="meta-city" class="input" placeholder="City" />
+          </div>
+          <div class="field-group">
+            <label for="meta-district" class="field-label">District</label>
+            <input type="text" id="meta-district" class="input" placeholder="District" />
+          </div>
+          <div class="field-group">
+            <label for="meta-village" class="field-label">Village</label>
+            <input type="text" id="meta-village" class="input" placeholder="Village" />
+          </div>
+          <div class="field-group">
+            <label for="meta-postal" class="field-label">Postal Code</label>
+            <input type="text" id="meta-postal" class="input" placeholder="Postal code" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Date & Time Tab -->
+      <div class="meta-panel" id="tab-datetime" role="tabpanel">
+        <div class="fields-grid">
+          <div class="field-group">
+            <label for="meta-date" class="field-label">Date Taken</label>
+            <input type="date" id="meta-date" class="input" />
+          </div>
+          <div class="field-group">
+            <label for="meta-time" class="field-label">Time Taken</label>
+            <input type="time" id="meta-time" class="input" step="1" />
+          </div>
+          <div class="field-group field-full">
+            <button id="btn-now" class="btn btn-outline btn-sm">Use Current Date &amp; Time</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Camera Tab -->
+      <div class="meta-panel" id="tab-camera" role="tabpanel">
+        <div class="fields-grid">
+          <div class="field-group">
+            <label for="meta-make" class="field-label">Camera Make</label>
+            <input type="text" id="meta-make" class="input" placeholder="e.g. Apple" />
+          </div>
+          <div class="field-group">
+            <label for="meta-model" class="field-label">Camera Model</label>
+            <input type="text" id="meta-model" class="input" placeholder="e.g. iPhone 15 Pro" />
+          </div>
+          <div class="field-group field-full">
+            <label for="meta-lens" class="field-label">Lens Model</label>
+            <input type="text" id="meta-lens" class="input" placeholder="e.g. 24mm f/1.8" />
+          </div>
+          <div class="field-group field-full">
+            <label for="meta-software" class="field-label">Software</label>
+            <input type="text" id="meta-software" class="input" placeholder="e.g. GeoTag Pro 1.0" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Author Tab -->
+      <div class="meta-panel" id="tab-author" role="tabpanel">
+        <div class="fields-grid">
+          <div class="field-group">
+            <label for="meta-artist" class="field-label">Artist / Photographer</label>
+            <input type="text" id="meta-artist" class="input" placeholder="Your name" />
+          </div>
+          <div class="field-group">
+            <label for="meta-copyright" class="field-label">Copyright</label>
+            <input type="text" id="meta-copyright" class="input" placeholder="© 2024 Your Name" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Image Tab -->
+      <div class="meta-panel" id="tab-image" role="tabpanel">
+        <div class="fields-grid">
+          <div class="field-group field-full">
+            <label for="meta-description" class="field-label">Description</label>
+            <input type="text" id="meta-description" class="input" placeholder="Image description" />
+          </div>
+          <div class="field-group field-full">
+            <label for="meta-comment" class="field-label">User Comment</label>
+            <textarea id="meta-comment" class="input textarea" rows="3" placeholder="Additional comments"></textarea>
+          </div>
+          <div class="field-group">
+            <label for="meta-orientation" class="field-label">Orientation</label>
+            <select id="meta-orientation" class="input select">
+              <option value="1">Normal</option>
+              <option value="2">Mirrored</option>
+              <option value="3">Rotated 180°</option>
+              <option value="4">Mirrored + 180°</option>
+              <option value="5">Mirrored + 90° CW</option>
+              <option value="6">Rotated 90° CW</option>
+              <option value="7">Mirrored + 90° CCW</option>
+              <option value="8">Rotated 90° CCW</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- .card-body -->
+  </section>
+
+  <!-- STEP 4: OVERLAY EDITOR -->
+  <section class="card overlay-section hidden" id="section-overlay">
+    <div class="card-header">
+      <span class="step-badge">4</span>
+      <h2>GeoTag Overlay</h2>
+      <label class="toggle-switch" title="Enable visible overlay">
+        <input type="checkbox" id="overlay-enabled" />
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </label>
+    </div>
+    <div class="card-body" id="overlay-body">
+
+      <!-- Template Picker -->
+      <div class="overlay-templates" id="overlay-templates">
+        <h3 class="section-label">Templates</h3>
+        <div class="template-grid" id="template-grid">
+          <!-- populated by overlay.js -->
+        </div>
+      </div>
+
+      <!-- Content Toggles -->
+      <div class="overlay-content-fields">
+        <h3 class="section-label">Overlay Content</h3>
+        <div class="content-toggles" id="content-toggles">
+          <label class="content-toggle"><input type="checkbox" data-field="coords" checked /> GPS Coordinates</label>
+          <label class="content-toggle"><input type="checkbox" data-field="address" /> Full Address</label>
+          <label class="content-toggle"><input type="checkbox" data-field="city" /> City</label>
+          <label class="content-toggle"><input type="checkbox" data-field="country" /> Country</label>
+          <label class="content-toggle"><input type="checkbox" data-field="date" checked /> Date</label>
+          <label class="content-toggle"><input type="checkbox" data-field="time" /> Time</label>
+          <label class="content-toggle"><input type="checkbox" data-field="altitude" /> Altitude</label>
+          <label class="content-toggle"><input type="checkbox" data-field="heading" /> Compass Heading</label>
+          <label class="content-toggle"><input type="checkbox" data-field="make" /> Camera Make</label>
+          <label class="content-toggle"><input type="checkbox" data-field="model" /> Camera Model</label>
+          <label class="content-toggle"><input type="checkbox" data-field="custom" /> Custom Text</label>
+        </div>
+        <div class="field-group" id="custom-text-wrap" style="display:none;">
+          <label for="overlay-custom-text" class="field-label">Custom Text</label>
+          <input type="text" id="overlay-custom-text" class="input" placeholder="Enter custom text…" />
+        </div>
+      </div>
+
+      <!-- Style Controls -->
+      <div class="overlay-style-fields">
+        <h3 class="section-label">Style</h3>
+        <div class="fields-grid fields-grid-3">
+          <div class="field-group">
+            <label for="ov-font-family" class="field-label">Font</label>
+            <select id="ov-font-family" class="input select">
+              <option value="Inter, sans-serif">Inter</option>
+              <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+              <option value="Arial, sans-serif">Arial</option>
+              <option value="Georgia, serif">Georgia</option>
+              <option value="'Courier New', monospace">Courier New</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="ov-font-size" class="field-label">Size (px)</label>
+            <input type="number" id="ov-font-size" class="input" value="14" min="8" max="120>
+          </div>
+          <div class="field-group">
+            <label for="ov-font-weight" class="field-label">Weight</label>
+            <select id="ov-font-weight" class="input select">
+              <option value="300">Light</option>
+              <option value="400" selected>Regular</option>
+              <option value="500">Medium</option>
+              <option value="600">Semi-bold</option>
+              <option value="700">Bold</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="ov-text-color" class="field-label">Text Color</label>
+            <input type="color" id="ov-text-color" class="input input-color" value="#ffffff" />
+          </div>
+          <div class="field-group">
+            <label for="ov-bg-color" class="field-label">Background</label>
+            <input type="color" id="ov-bg-color" class="input input-color" value="#000000" />
+          </div>
+          <div class="field-group">
+            <label for="ov-bg-opacity" class="field-label">BG Opacity</label>
+            <input type="range" id="ov-bg-opacity" class="input range" min="0" max="1" step="0.05" value="0.7" />
+          </div>
+          <div class="field-group">
+            <label for="ov-border-color" class="field-label">Border Color</label>
+            <input type="color" id="ov-border-color" class="input input-color" value="#ffffff" />
+          </div>
+          <div class="field-group">
+            <label for="ov-border-width" class="field-label">Border Width</label>
+            <input type="number" id="ov-border-width" class="input" value="0" min="0" max="10" />
+          </div>
+          <div class="field-group">
+            <label for="ov-border-radius" class="field-label">Radius (px)</label>
+            <input type="number" id="ov-border-radius" class="input" value="8" min="0" max="64" />
+          </div>
+          <div class="field-group">
+            <label for="ov-padding" class="field-label">Padding (px)</label>
+            <input type="number" id="ov-padding" class="input" value="10" min="0" max="48" />
+          </div>
+          <div class="field-group">
+            <label for="ov-shadow" class="field-label">Shadow</label>
+            <select id="ov-shadow" class="input select">
+              <option value="none">None</option>
+              <option value="sm">Small</option>
+              <option value="md" selected>Medium</option>
+              <option value="lg">Large</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="ov-text-align" class="field-label">Align</label>
+            <select id="ov-text-align" class="input select">
+              <option value="left" selected>Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preview Canvas -->
+      <div class="overlay-preview-wrap">
+        <h3 class="section-label">Preview <span class="hint-text">(drag to reposition, handles to resize)</span></h3>
+        <div class="canvas-container" id="canvas-container">
+          <canvas id="preview-canvas"></canvas>
+          <div id="overlay-handle" class="overlay-handle hidden">
+            <div class="resize-handle tl" data-dir="tl"></div>
+            <div class="resize-handle tr" data-dir="tr"></div>
+            <div class="resize-handle bl" data-dir="bl"></div>
+            <div class="resize-handle br" data-dir="br"></div>
+            <div class="overlay-lock-btn" id="overlay-lock-btn" title="Lock/Unlock aspect ratio">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 116 0v2"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- .card-body -->
+  </section>
+
+  <!-- STEP 5: EXPORT -->
+  <section class="card export-section hidden" id="section-export">
+    <div class="card-header">
+      <span class="step-badge">5</span>
+      <h2>Export</h2>
+    </div>
+    <div class="card-body">
+      <div class="export-preview" id="export-preview-area">
+        <div class="export-meta-summary" id="export-meta-summary"></div>
+      </div>
+      <div class="export-actions">
+        <button id="btn-export-exif" class="btn btn-primary btn-lg">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17h14M10 3v10M6 10l4 4 4-4"/></svg>
+          Export with EXIF Only
+        </button>
+        <button id="btn-export-overlay" class="btn btn-primary btn-lg btn-accent" disabled>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17h14M10 3v10M6 10l4 4 4-4"/></svg>
+          Export with EXIF + Overlay
+        </button>
+      </div>
+      <p class="export-note">All processing happens locally. Your image is never uploaded.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===== FULLSCREEN MODAL ===== -->
+<div id="fullscreen-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Fullscreen image preview">
+  <div class="modal-backdrop" id="modal-backdrop"></div>
+  <div class="modal-content modal-img">
+    <button class="modal-close" id="modal-close" aria-label="Close">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l12 12M16 4L4 16"/></svg>
+    </button>
+    <img id="fullscreen-img" alt="Fullscreen preview" />
+  </div>
+</div>
+
+<!-- ===== COMPARE MODAL ===== -->
+<div id="compare-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Metadata comparison">
+  <div class="modal-backdrop" id="compare-backdrop"></div>
+  <div class="modal-content modal-compare">
+    <button class="modal-close" id="compare-close" aria-label="Close">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l12 12M16 4L4 16"/></svg>
+    </button>
+    <h2 class="modal-title">Metadata Comparison</h2>
+    <div class="compare-grid">
+      <div class="compare-col">
+        <h3>Original</h3>
+        <div id="compare-original" class="compare-data"></div>
+      </div>
+      <div class="compare-col">
+        <h3>Updated</h3>
+        <div id="compare-updated" class="compare-data"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- External Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.js"></script>
+
+<!-- App Modules -->
+<script src="utils.js"></script>
+<script src="exif.js"></script>
+<script src="map.js"></script>
+<script src="overlay.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
